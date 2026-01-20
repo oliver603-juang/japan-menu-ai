@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI 點餐助手 (v9.3 最終版)</title>
+    <style>
+        :root { --primary: #4285f4; --bg: #f0f2f5; --surface: #ffffff; --text: #202124; --red: #ea4335; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background: var(--bg); color: var(--text); padding-bottom: 100px; }
+        
+        /* 設定區 */
+        .settings-box { background: #333; color: #fff; padding: 20px; text-align: center; }
+        .api-input { width: 70%; padding: 10px; border-radius: 4px; border: none; margin-top: 5px; font-size: 1rem; }
+        .btn-save { padding: 10px 20px; background: #34a853; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .link-apikey { color: #8ab4f8; text-decoration: none; font-size: 0.9rem; display: inline-block; margin-bottom: 10px; border-bottom: 1px dashed #8ab4f8; }
+        
+        /* 主操作區 */
+        .hero-section { text-align: center; padding: 20px; background: var(--surface); margin-bottom: 10px; border-bottom: 1px solid #ddd; }
+        .btn-cam { 
+            background: var(--primary); color: white; font-size: 1.1rem; font-weight: bold; 
+            padding: 12px 30px; border: none; border-radius: 50px; 
+            box-shadow: 0 4px 15px rgba(66, 133, 244, 0.3); cursor: pointer;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        
+        .preview-box { margin: 15px auto; width: 90%; max-width: 400px; border-radius: 12px; overflow: hidden; display: none; border: 2px solid #ddd; position: relative; }
+        #previewImg { width: 100%; display: block; }
+        .img-info { position: absolute; bottom: 0; left: 0; background: rgba(0,0,0,0.6); color: white; font-size: 0.7rem; padding: 2px 6px; }
+        
+        .loading { display: none; text-align: center; padding: 30px; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #ddd; border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 菜單列表 */
+        .menu-list { padding: 10px; max-width: 600px; margin: 0 auto; }
+        .category-group { margin-bottom: 25px; }
+        .category-title { 
+            font-size: 1.3rem; font-weight: bold; color: #333; 
+            margin: 0 0 10px 5px; padding-left: 10px; border-left: 5px solid var(--primary); 
+        }
+        
+        .menu-card { 
+            background: var(--surface); border-radius: 12px; padding: 15px; margin-bottom: 10px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center;
+        }
+        .item-info { flex: 1; padding-right: 10px; }
+        .item-jp { font-size: 1.1rem; font-weight: bold; margin-bottom: 4px; color: #202124; }
+        .item-zh { font-size: 0.9rem; color: #5f6368; }
+        .item-price { font-size: 1.1rem; color: var(--red); font-weight: bold; margin-top: 4px; }
+        
+        .qty-control { display: flex; align-items: center; gap: 8px; background: #f1f3f4; padding: 4px; border-radius: 20px; }
+        .btn-qty { width: 32px; height: 32px; border-radius: 50%; border: none; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+        .btn-minus { background: #fff; color: #555; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .btn-plus { background: var(--primary); color: white; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        .qty-num { font-weight: bold; min-width: 24px; text-align: center; font-size: 1.1rem; }
+
+        .footer-cart { 
+            position: fixed; bottom: 0; left: 0; width: 100%; background: #202124; color: white; 
+            padding: 15px 20px; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 -4px 10px rgba(0,0,0,0.2); z-index: 100; transition: transform 0.3s;
+        }
+        .btn-checkout { background: #fbbc04; color: #202124; border: none; padding: 12px 30px; border-radius: 30px; font-weight: bold; font-size: 1.1rem; cursor: pointer; }
+
+        .receipt-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6);
+            z-index: 2000; display: none; justify-content: center; align-items: flex-end;
+        }
+        .receipt-card {
+            background: white; width: 100%; max-width: 600px; height: 90%; 
+            border-radius: 20px 20px 0 0; display: flex; flex-direction: column; overflow: hidden;
+            animation: slideUp 0.3s ease-out;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        .receipt-header { background: #333; color: white; padding: 20px; text-align: center; font-size: 1.2rem; position: relative; }
+        .btn-close { position: absolute; right: 15px; top: 15px; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; }
+        .receipt-body { flex: 1; padding: 20px; overflow-y: auto; background: #f9f9f9; }
+        .receipt-item { display: flex; justify-content: space-between; padding: 15px 0; border-bottom: 1px dashed #ccc; font-size: 1.1rem; }
+        .receipt-total { padding: 20px; background: #fff; border-top: 2px solid #eee; text-align: right; font-size: 1.5rem; font-weight: bold; color: var(--red); }
+        .jp-text-large { font-size: 1.4rem; font-weight: bold; color: #000; margin-bottom: 5px; display:block;}
+
+        /* 錯誤訊息區 */
+        .error-box { background: #fdecea; color: #d93025; padding: 15px; margin: 10px; border-radius: 8px; display: none; text-align: left; font-size: 0.9rem; border: 1px solid #fad2cf; }
+
+    </style>
+</head>
+<body>
+
+<div class="settings-box" id="settingsBox">
+    <div style="margin-bottom:10px; font-size:1.1rem;">🔑 設定 Google Gemini API</div>
+    
+    <a href="https://aistudio.google.com/app/apikey" target="_blank" class="link-apikey">
+        👉 按此免費取得 API Key
+    </a>
+    <br>
+    
+    <input type="password" id="apiKeyInput" class="api-input" placeholder="請貼上您的 API Key...">
+    <button class="btn-save" onclick="saveKey()">儲存並開始</button>
+    <div style="margin-top:10px; font-size:0.8rem; color:#aaa;">Key 僅儲存於您的手機中，安全無虞</div>
+</div>
+
+<div class="hero-section">
+    <h3>🚀 AI 點餐助手 v9.3</h3>
+    <button class="btn-cam" onclick="document.getElementById('fileInput').click()">
+        📷 拍攝菜單
+    </button>
+    <div class="preview-box" id="previewBox">
+        <img id="previewImg" />
+        <div class="img-info" id="imgInfo"></div>
+    </div>
+</div>
+
+<div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div id="loadingText" style="color:#666;">
+        正在壓縮圖片並上傳...<br>
+        <small>AI 分析中，請稍候</small>
+    </div>
+</div>
+
+<div class="error-box" id="errorBox"></div>
+
+<div class="menu-list" id="menuContainer">
+    <div style="text-align:center; color:#aaa; margin-top:50px;">
+        <p>相機請對準菜單<br>支援高解析度照片自動壓縮</p>
+    </div>
+</div>
+
+<div class="footer-cart" id="footerCart" style="display:none;">
+    <div>
+        <div style="font-size:0.8rem; opacity:0.8;">預估金額</div>
+        <div style="font-size:1.6rem; font-weight:bold;">¥ <span id="totalPrice">0</span></div>
+    </div>
+    <button class="btn-checkout" onclick="openReceipt()">結帳出示</button>
+</div>
+
+<div class="receipt-modal" id="receiptModal">
+    <div class="receipt-card">
+        <div class="receipt-header">
+            注文リスト (點餐清單)
+            <button class="btn-close" onclick="closeReceipt()">×</button>
+        </div>
+        <div class="receipt-body" id="receiptContent"></div>
+        <div class="receipt-total">
+            Total: ¥ <span id="receiptTotal">0</span>
+        </div>
+    </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*" capture="environment" onchange="handleImage(this)" style="display:none;">
+
+<script>
+    let cart = {}; 
+    let apiKey = localStorage.getItem('gemini_api_key');
+
+    if (apiKey) document.getElementById('settingsBox').style.display = 'none';
+
+    function saveKey() {
+        const key = document.getElementById('apiKeyInput').value.trim();
+        if (!key) return alert('請輸入 API Key');
+        localStorage.setItem('gemini_api_key', key);
+        apiKey = key;
+        document.getElementById('settingsBox').style.display = 'none';
+        alert('API Key 已儲存，請開始拍照！');
+    }
+
+    // ★★★ 核心功能：圖片壓縮 ★★★
+    function handleImage(input) {
+        if (!apiKey) return alert('請先設定 API Key');
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            const loading = document.getElementById('loading');
+            const errorBox = document.getElementById('errorBox');
+            
+            loading.style.display = 'block';
+            errorBox.style.display = 'none';
+            document.getElementById('menuContainer').innerHTML = '';
+            document.getElementById('footerCart').style.display = 'none';
+            document.getElementById('previewBox').style.display = 'none';
+
+            // 執行壓縮 (長邊限制 1024px)
+            compressImage(file, 1024, 0.7).then(compressedDataUrl => {
+                const img = document.getElementById('previewImg');
+                img.src = compressedDataUrl;
+                document.getElementById('previewBox').style.display = 'block';
+                
+                const base64Data = compressedDataUrl.split(',')[1];
+                callGemini(base64Data, file.type);
+            }).catch(err => {
+                loading.style.display = 'none';
+                alert("圖片處理失敗: " + err);
+            });
+        }
+    }
+
+    // 壓縮圖片函式
+    function compressImage(file, maxWidth, quality) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = event => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+                    if (width > maxWidth) {
+                        height = Math.round(height * (maxWidth / width));
+                        width = maxWidth;
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    
+                    document.getElementById('imgInfo').innerText = 
+                        `原始: ${Math.round(file.size/1024)}KB -> 壓縮: ${Math.round(dataUrl.length/1024*0.75)}KB`;
+                    
+                    resolve(dataUrl);
+                };
+                img.onerror = error => reject(error);
+            };
+            reader.onerror = error => reject(error);
+        });
+    }
+
+    async function callGemini(base64Image, mimeType) {
+        const loading = document.getElementById('loading');
+        const loadingText = document.getElementById('loadingText');
+        const errorBox = document.getElementById('errorBox');
+        
+        loadingText.innerHTML = '圖片已上傳<br><small>AI 正在閱讀菜單並翻譯...</small>';
+        
+        try {
+            const prompt = `
+            你是一個專業的日本菜單數位化助手。請分析圖片並輸出 JSON。
+            
+            【嚴格規則】：
+            1. **區分類別與商品**：大字體且無價格的是「類別(Category)」。
+            2. **忽略無價格項目**：items 裡每項都必須有明確價格。若無價格，請忽略。
+            3. **自動合併**：請將斷行的菜名合併。
+            4. **翻譯**：將日文菜名翻譯成繁體中文。
+            5. **JSON 結構**：
+            [
+              {
+                "category": "類別名稱",
+                "items": [
+                  { "jp": "日文原名", "zh": "中文翻譯", "price": 123 }
+                ]
+              }
+            ]
+            6. 請只輸出 JSON，不要 Markdown。
+            `;
+
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+                        ]
+                    }]
+                })
+            });
+
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(`API Error (${response.status}): ${data.error?.message || response.statusText}`);
+            }
+            if (data.error) throw new Error(data.error.message);
+            
+            let rawText = data.candidates[0].content.parts[0].text;
+            rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            
+            const menuData = JSON.parse(rawText);
+            renderMenu(menuData);
+
+        } catch (e) {
+            console.error(e);
+            errorBox.style.display = 'block';
+            errorBox.innerHTML = `<strong>處理失敗</strong><br>${e.message}<br><br>建議：請重新拍攝，確保網路暢通。`;
+        } finally {
+            loading.style.display = 'none';
+        }
+    }
+
+    function renderMenu(categories) {
+        const container = document.getElementById('menuContainer');
+        container.innerHTML = '';
+        cart = {}; 
+
+        if (!categories || categories.length === 0) {
+            container.innerHTML = '<div style="padding:20px; text-align:center;">AI 無法辨識出任何菜色，請重拍。</div>';
+            return;
+        }
+
+        categories.forEach(cat => {
+            if(!cat.items || cat.items.length === 0) return;
+
+            const group = document.createElement('div');
+            group.className = 'category-group';
+            
+            const title = document.createElement('div');
+            title.className = 'category-title';
+            title.innerText = cat.category;
+            group.appendChild(title);
+
+            cat.items.forEach(item => {
+                if (item.price === 0) return; 
+
+                const card = document.createElement('div');
+                card.className = 'menu-card';
+                const itemId = 'item-' + Math.random().toString(36).substr(2, 9);
+                item.id = itemId; 
+
+                card.innerHTML = `
+                    <div class="item-info">
+                        <div class="item-jp">${item.jp}</div>
+                        <div class="item-zh">${item.zh}</div>
+                        <div class="item-price">¥${item.price}</div>
+                    </div>
+                    <div class="qty-control">
+                        <button class="btn-qty btn-minus" onclick="updateCart('${itemId}', -1)">-</button>
+                        <span class="qty-num" id="qty-${itemId}">0</span>
+                        <button class="btn-qty btn-plus" onclick="updateCart('${itemId}', 1)">+</button>
+                    </div>
+                `;
+                group.appendChild(card);
+                cart[itemId] = { ...item, qty: 0 };
+            });
+
+            container.appendChild(group);
+        });
+
+        document.getElementById('footerCart').style.display = 'flex';
+        updateTotal();
+    }
+
+    window.updateCart = function(id, delta) {
+        if (!cart[id]) return;
+        cart[id].qty += delta;
+        if (cart[id].qty < 0) cart[id].qty = 0;
+        
+        document.getElementById(`qty-${id}`).innerText = cart[id].qty;
+        updateTotal();
+    }
+
+    function updateTotal() {
+        let total = 0;
+        let count = 0;
+        for (let id in cart) {
+            total += cart[id].price * cart[id].qty;
+            count += cart[id].qty;
+        }
+        document.getElementById('totalPrice').innerText = total;
+        
+        const btn = document.querySelector('.btn-checkout');
+        if(count > 0) {
+            btn.style.opacity = '1';
+            btn.innerText = `結帳出示 (${count})`;
+        } else {
+            btn.style.opacity = '0.7';
+            btn.innerText = `結帳出示`;
+        }
+    }
+
+    window.openReceipt = function() {
+        const modal = document.getElementById('receiptModal');
+        const content = document.getElementById('receiptContent');
+        const totalEl = document.getElementById('receiptTotal');
+        
+        let items = [];
+        let total = 0;
+        for (let id in cart) {
+            if (cart[id].qty > 0) {
+                items.push(cart[id]);
+                total += cart[id].price * cart[id].qty;
+            }
+        }
+
+        if (items.length === 0) return alert('購物車是空的');
+
+        let html = `
+            <div style="text-align:center; color:#666; font-size:0.9rem; margin-bottom:20px;">
+                店員さん、これをお願いします。<br>(不好意思，我要點這些)
+            </div>
+        `;
+        
+        items.forEach(item => {
+            html += `
+                <div class="receipt-item">
+                    <div style="flex:1">
+                        <span class="jp-text-large">${item.jp}</span>
+                        <span style="font-size:0.85rem; color:#888;">${item.zh}</span>
+                    </div>
+                    <div style="width:80px; text-align:right;">
+                        x <strong>${item.qty}</strong>
+                    </div>
+                    <div style="width:80px; text-align:right; color:#ea4335;">
+                        ¥${item.price * item.qty}
+                    </div>
+                </div>
+            `;
+        });
+
+        content.innerHTML = html;
+        totalEl.innerText = total;
+        modal.style.display = 'flex';
+    }
+
+    window.closeReceipt = function() {
+        document.getElementById('receiptModal').style.display = 'none';
+    }
+</script>
+</body>
+</html>
